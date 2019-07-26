@@ -1,0 +1,11 @@
+# os specific files
+.DS_Store
+
+# development files
+node_modules
+/coverage
+/.vscode
+
+# user specific files
+*.sublime-*
+.nyc_output
