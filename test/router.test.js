@@ -6,11 +6,11 @@ import { View, Middleware } from '@xinix/xin-router';
 describe('Router', () => {
   define('router-home', class extends View {
     get template () {
-      return `home`;
+      return 'home';
     }
   });
 
-  it('navigate', async () => {
+  it.only('navigate', async () => {
     window.location.replace('#');
 
     const mockHistory = new MockHistory();
@@ -150,7 +150,7 @@ describe('Router', () => {
     const order = [];
     define('router-lifecycle-foo', class extends View {
       get template () {
-        return `lifecycle-foo`;
+        return 'lifecycle-foo';
       }
 
       focusing () {
@@ -168,7 +168,7 @@ describe('Router', () => {
 
     define('router-lifecycle-bar', class extends View {
       get template () {
-        return `lifecycle-bar`;
+        return 'lifecycle-bar';
       }
 
       focusing () {

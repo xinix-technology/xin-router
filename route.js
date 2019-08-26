@@ -1,4 +1,4 @@
-import { define, Component, Template, Async } from '@xinix/xin';
+import { define, Component, Template, event } from '@xinix/xin';
 
 export class Route extends Component {
   static routeRegExp (str) {
@@ -118,15 +118,15 @@ export class Route extends Component {
     this.__routeViewElement.set('parameters', parameters);
 
     await this.__routeViewElement.focusing();
-    this.__routeViewElement.fire('focusing', { view: this.__routeViewElement });
+    event(this.__routeViewElement).fire('focusing', { view: this.__routeViewElement });
 
     await this.parentElement.insertBefore(this.__routeViewElement, this);
 
     await this.__routeViewElement.focused();
-    this.__routeViewElement.fire('focus', { view: this.__routeViewElement });
+    event(this.__routeViewElement).fire('focus', { view: this.__routeViewElement });
 
     // TODO: this is workaround to make sure router children already attached
-    await Async.sleep(100);
+    // await Async.sleep(100);
   }
 
   async leave () {
@@ -137,7 +137,7 @@ export class Route extends Component {
     await this.parentElement.removeChild(this.__routeViewElement);
 
     await this.__routeViewElement.blurred();
-    this.__routeViewElement.fire('blur', { view: this.__routeViewElement });
+    event(this.__routeViewElement).fire('blur', { view: this.__routeViewElement });
 
     this.__routeViewElement = undefined;
   }

@@ -1,4 +1,4 @@
-import { define, Component, event, Async } from '@xinix/xin';
+import { define, Component, event, Async } from '@xinix/xin'; // eslint-disable-line max-lines
 import qs from 'querystring';
 
 const debug = require('debug')('xin-router:router');
