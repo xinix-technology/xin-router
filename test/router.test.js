@@ -1,7 +1,7 @@
-import { define, Async, Repository } from '@xinix/xin';
+import { define, Repository } from '@xinix/xin';
 import { Fixture } from '@xinix/xin/components/fixture';
 import assert from 'assert';
-import { View, Middleware } from '@xinix/xin-router';
+import { Router, View, Middleware } from '@xinix/xin-router';
 
 describe('Router', () => {
   define('router-home', class extends View {
@@ -10,7 +10,7 @@ describe('Router', () => {
     }
   });
 
-  it.only('navigate', async () => {
+  it('navigate', async () => {
     window.location.replace('#');
 
     const mockHistory = new MockHistory();
@@ -38,51 +38,42 @@ describe('Router', () => {
       await fixture.waitConnected();
       const router = fixture.$.router;
 
-      await Async.sleep(50);
-
-      assert.strictEqual(router.getClientUri(), '/');
+      assert.strictEqual(router.getUri(router.location), '/');
       assert.strictEqual(fixture.$$('[xin-view]').nextElementSibling.uri, '/');
 
-      router.push('/foo');
-      await Async.sleep(50);
+      await router.push('/foo');
 
-      assert.strictEqual(router.getClientUri(), '/foo');
+      assert.strictEqual(router.getUri(router.location), '/foo');
       assert.strictEqual(fixture.$$('[xin-view]').nextElementSibling.uri, '/foo');
       assert.strictEqual(mockHistory.position, 0);
 
-      router.push('/bar');
-      await Async.sleep(50);
+      await router.push('/bar');
 
-      assert.strictEqual(router.getClientUri(), '/bar');
+      assert.strictEqual(router.getUri(router.location), '/bar');
       assert.strictEqual(fixture.$$('[xin-view]').nextElementSibling.uri, '/bar');
       assert.strictEqual(mockHistory.position, 1);
 
-      router.push('/foo');
-      await Async.sleep(50);
+      await router.push('/foo');
 
-      router.go(-1);
-      await Async.sleep(50);
+      await router.go(-1);
 
       assert.strictEqual(fixture.$$('[xin-view]').nextElementSibling.uri, '/bar');
 
-      router.go(0);
-      await Async.sleep(50);
+      await router.go(0);
 
       assert.strictEqual(fixture.$$('[xin-view]').nextElementSibling.uri, '/bar');
 
-      router.go(1);
-      await Async.sleep(50);
+      await router.go(1);
 
       assert.strictEqual(fixture.$$('[xin-view]').nextElementSibling.uri, '/foo');
 
-      router.replace('/');
-      await Async.sleep(50);
+      await router.replace('/');
 
       assert.strictEqual(fixture.$$('[xin-view]').nextElementSibling.uri, '/');
       assert.strictEqual(mockHistory.position, 2);
 
       fixture.$.fooLink.click();
-      await Async.sleep(50);
+      await router.waitFor('router-dispatch');
 
       assert.strictEqual(fixture.$$('[xin-view]').nextElementSibling.uri, '/foo');
     } finally {
@@ -119,26 +110,19 @@ describe('Router', () => {
       await fixture.waitConnected();
       const router = fixture.$.router;
 
-      await Async.sleep(50);
-
-      router.push('/foo/satu');
-      await Async.sleep(50);
+      await router.push('/foo/satu');
       assert.strictEqual(fixture.$$('[xin-view]').$.segmentEl.textContent.trim(), 'satu');
 
-      router.push('/foo/dua');
-      await Async.sleep(50);
+      await router.push('/foo/dua');
       assert.strictEqual(fixture.$$('[xin-view]').$.segmentEl.textContent.trim(), 'dua');
 
-      router.push('/bar?q=satu');
-      await Async.sleep(50);
+      await router.push('/bar?q=satu');
       assert.strictEqual(fixture.$$('[xin-view]').$.queryEl.textContent.trim(), 'satu');
 
-      router.push('/bar?q=dua');
-      await Async.sleep(50);
+      await router.push('/bar?q=dua');
       assert.strictEqual(fixture.$$('[xin-view]').$.queryEl.textContent.trim(), 'dua');
 
-      router.push('/bar', { q: 'tiga' });
-      await Async.sleep(50);
+      await router.push('/bar', { q: 'tiga' });
       assert.strictEqual(fixture.$$('[xin-view]').$.queryEl.textContent.trim(), 'tiga');
     } finally {
       fixture.dispose();
@@ -205,19 +189,14 @@ describe('Router', () => {
       await fixture.waitConnected();
       const router = fixture.$.router;
 
-      await Async.sleep(50);
-
-      router.push('/foo?q=satu');
-      await Async.sleep(50);
-
-      router.push('/bar?q=dua');
-      await Async.sleep(50);
+      await router.push('/foo?q=satu');
+      await router.push('/bar?q=dua');
 
       assert.notStrictEqual(order.length, 0);
       assert.strictEqual(order[0], 'foo focusing');
       assert.strictEqual(order[1], 'foo focused');
-      assert.strictEqual(order[2], 'bar focusing');
-      assert.strictEqual(order[3], 'foo blurred');
+      assert.strictEqual(order[2], 'foo blurred');
+      assert.strictEqual(order[3], 'bar focusing');
       assert.strictEqual(order[4], 'bar focused');
     } finally {
       fixture.dispose();
@@ -274,8 +253,6 @@ describe('Router', () => {
       });
       await router.start();
 
-      await Async.sleep(100);
-
       assert.strictEqual(stack.length, 5);
       assert.strictEqual(stack[0], 'before mw1');
       assert.strictEqual(stack[1], 'before mw2');
@@ -285,8 +262,7 @@ describe('Router', () => {
 
       stack = [];
 
-      router.push('/foo');
-      await Async.sleep(200);
+      await router.push('/foo');
 
       assert.strictEqual(stack.length, 5);
       assert.strictEqual(stack[0], 'before mw1');
@@ -308,9 +284,10 @@ describe('Router', () => {
 
     const fixture = await Fixture.create(`
       <div>
+        <span (click)='$global.router.push("/")'>home</span>
         <a href="#!/">home</a>
-        <a href="#!/foo/bar">foo bar</a>
-        <a href="#!/foo/baz">foo baz</a>
+        <a href="#!/foo/bar">foo/bar</a>
+        <a href="#!/foo/baz">foo/baz</a>
         <a href="#!/bar">bar</a>
       </div>
 
@@ -321,9 +298,9 @@ describe('Router', () => {
         <xin-route uri="/foo/{name}">
           <template>
             <div>foo</div>
-            <xin-router id="router2">
-              <xin-route uri="/foo/bar"><template>bar</template>
-              <xin-route uri="/foo/baz"><template>baz</template>
+            <xin-router root-uri="/foo" id="router2">
+              <xin-route uri="/bar"><template>bar</template></xin-route>
+              <xin-route uri="/baz"><template>baz</template></xin-route>
             </xin-router>
           </template>
         </xin-route>
@@ -337,24 +314,82 @@ describe('Router', () => {
       await fixture.waitConnected();
       const router = fixture.$.router;
 
-      await Async.sleep(100);
-
       assert.strictEqual(router.textContent.trim(), 'home');
 
-      router.push('/foo/bar');
-      await Async.sleep(200);
+      await router.push('/foo/bar');
       assert(router.textContent.match(/foo\s+bar/));
 
-      router.push('/foo/baz');
-      await Async.sleep(200);
+      await router.push('/foo/baz');
       assert(router.textContent.match(/foo\s+baz/));
 
-      router.push('/bar');
-      await Async.sleep(200);
+      await router.push('/bar');
       assert(router.textContent.match(/bar/));
     } finally {
       fixture.dispose();
       window.location.replace('#');
+    }
+  });
+
+  it('lazy load view', async () => {
+    Router.init(true);
+    window.location.replace('#');
+
+    Repository.bootstrap({
+      'view.loaders': [
+        {
+          test: /^router-lazy-foo/,
+          load (view) {
+            return import('./views/router-lazy-foo');
+          },
+        },
+      ],
+    });
+
+    Router.addLoader({
+      test: /^router-lazy-bar/,
+      load (view) {
+        return import('./views/router-lazy-bar');
+      },
+    });
+
+    const fixture = await Fixture.create(`
+      <div>
+        <a href="#!/">home</a>
+        <a href="#!/foo">foo</a>
+        <a href="#!/bar">bar</a>
+      </div>
+
+      <xin-router id="router">
+        <xin-route uri="/">
+          <template>home</template>
+        </xin-route>
+        <xin-route uri="/foo" view="router-lazy-foo"></xin-route>
+        <xin-route uri="/bar" view="router-lazy-bar"></xin-route>
+      </xin-router>
+    `);
+
+    try {
+      await fixture.waitConnected();
+      const router = fixture.$.router;
+
+      assert.strictEqual(router.textContent.trim(), 'home');
+
+      let view;
+
+      await router.push('/foo');
+      view = router.$$('router-lazy-foo');
+      assert(view);
+      assert('__id' in view);
+
+      await router.push('/bar');
+      view = router.$$('router-lazy-bar');
+      assert(view);
+      assert('__id' in view);
+    } finally {
+      fixture.dispose();
+      window.location.replace('#');
+
+      Router.init(true);
     }
   });
 });

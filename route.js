@@ -1,4 +1,5 @@
-import { define, Component, Template, event } from '@xinix/xin';
+import { define, Component, Template } from '@xinix/xin';
+import { Router } from './router';
 
 export class Route extends Component {
   static routeRegExp (str) {
@@ -34,6 +35,7 @@ export class Route extends Component {
   get props () {
     return {
       ...super.props,
+
       uri: {
         type: String,
         observer: '__routeObserveUri(uri)',
@@ -46,21 +48,20 @@ export class Route extends Component {
     };
   }
 
+  get routers () {
+    return this.__routeViewElement.routers;
+  }
+
   attached () {
     super.attached();
 
-    this.__routeRouter = this.parentElement.closest('xin-router');
-    if (!this.__routeRouter) {
-      throw new Error('Missing router instance');
-    }
-
-    this.__routeRouter.__routerAddRoute(this);
+    this.fire('route-attach');
   }
 
   detached () {
     super.detached();
 
-    this.__routeRouter.__routerRemoveRoute(this);
+    this.fire('route-detach');
   }
 
   __routeObserveUri (uri) {
@@ -104,6 +105,10 @@ export class Route extends Component {
 
   async enter (ctx) {
     if (!this.__routeViewElement) {
+      if (this.view) {
+        await Router.prepare(this.view);
+      }
+
       const viewEl = document.createElement(this.view || 'xin-view');
       if (!this.view) {
         viewEl.template = this.__routeTemplate;
@@ -111,22 +116,8 @@ export class Route extends Component {
       this.__routeViewElement = viewEl;
     }
 
-    const parameters = {
-      ...this.__routeExtractSegmentParameters(ctx.pathname),
-      ...ctx.parameters,
-    };
-    this.__routeViewElement.set('parameters', parameters);
-
-    await this.__routeViewElement.focusing();
-    event(this.__routeViewElement).fire('focusing', { view: this.__routeViewElement });
-
-    await this.parentElement.insertBefore(this.__routeViewElement, this);
-
-    await this.__routeViewElement.focused();
-    event(this.__routeViewElement).fire('focus', { view: this.__routeViewElement });
-
-    // TODO: this is workaround to make sure router children already attached
-    // await Async.sleep(100);
+    ctx = ctx.for(this);
+    await this.__routeViewElement.__viewEnter(this, ctx);
   }
 
   async leave () {
@@ -134,10 +125,7 @@ export class Route extends Component {
       return;
     }
 
-    await this.parentElement.removeChild(this.__routeViewElement);
-
-    await this.__routeViewElement.blurred();
-    event(this.__routeViewElement).fire('blur', { view: this.__routeViewElement });
+    await this.__routeViewElement.__viewLeave(this);
 
     this.__routeViewElement = undefined;
   }

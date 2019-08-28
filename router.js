@@ -1,10 +1,57 @@
-import { define, Component, event, Async } from '@xinix/xin'; // eslint-disable-line max-lines
-import qs from 'querystring';
+import { define, Component, Repository, event } from '@xinix/xin'; // eslint-disable-line max-lines
+import { Context } from './context';
 
 const debug = require('debug')('xin-router:router');
-const URL = window.URL;
+
+let loaders = [];
 
 export class Router extends Component {
+  static prepare (view) {
+    const repo = Repository.singleton();
+    if (repo.get(view)) {
+      return;
+    }
+
+    Router.init();
+
+    for (const loader of loaders) {
+      if (view.match(loader.test)) {
+        return loader.load(view);
+      }
+    }
+  }
+
+  static addLoader (loader) {
+    Router.init();
+
+    const index = loaders.indexOf(loader);
+    if (index === -1) {
+      loaders.push(loader);
+    }
+  }
+
+  static removeLoader (loader) {
+    Router.init();
+
+    const index = loaders.indexOf(loader);
+    if (index !== -1) {
+      loaders.splice(index, 1);
+    }
+  }
+
+  static init (reset) {
+    if (reset) {
+      loaders = [];
+    }
+    if (loaders.length === 0) {
+      const repo = Repository.singleton();
+      const repoLoaders = repo.get('view.loaders');
+      if (repoLoaders && repoLoaders.length) {
+        loaders.push(...repoLoaders);
+      }
+    }
+  }
+
   get props () {
     return {
       ...super.props,
@@ -50,48 +97,42 @@ export class Router extends Component {
     return this.__routerHashRegexp;
   }
 
-  getClientUri () {
+  getUri (location) {
     try {
       let uri;
       if (this.mode === 'history') {
-        uri = decodeURI(this.location.pathname + this.location.search);
+        uri = decodeURI(location.pathname + location.search);
         uri = uri.replace(/\?(.*)$/, '');
         uri = this.rootUri === '/' ? uri : uri.replace(this.rootUri, '');
       } else {
-        const match = this.location.href.match(this.hashRegexp);
+        const match = location.href.match(this.hashRegexp);
         uri = match ? match[1] : '';
       }
 
       return '/' + uri.toString().replace(/\/$/, '').replace(/^\//, '');
     } catch (err) {
       console.error('Fragment is not match any pattern, fallback to /');
+      console.error(err);
       return '/';
     }
-  }
-
-  get isRoot () {
-    return Boolean(!this.__routerParent);
   }
 
   created () {
     this.middlewares = [];
     this.routes = [];
-    this.routers = [];
   }
 
   async attached () {
-    this.__routerParent = this.parentElement.closest('xin-router');
-    if (!this.isRoot) {
-      this.__routerParent.__routerAddRouter(this);
-      await Async.sleep(1);
-      this.__middlewareChain = compose(this.middlewares);
-      return;
-    }
+    super.attached();
 
-    this.setAttribute('root', true);
+    this.__routerIsRoot = Boolean(!this.parentElement.closest('xin-router'));
 
-    await Async.sleep(1);
-    this.__middlewareChain = compose(this.middlewares);
+    this.routes = [...this.querySelectorAll('xin-route')];
+    await Promise.all(this.routes.map(async route => {
+      await event(route).waitFor('route-attach');
+    }));
+
+    this.fire('router-attach');
 
     if (!this.manual) {
       this.start();
@@ -99,17 +140,11 @@ export class Router extends Component {
   }
 
   detached () {
+    super.detached();
+
     this.stop();
 
-    this.routes.forEach(route => route.leave());
-    this.__middlewareChain = undefined;
-
-    if (this.isRoot) {
-      this.removeAttribute('root');
-    } else {
-      this.__routerParent.__routerRemoveRouter(this);
-    }
-    this.__routerParent = undefined;
+    this.__routerIsRoot = undefined;
   }
 
   use (middleware) {
@@ -117,7 +152,7 @@ export class Router extends Component {
   }
 
   async start () {
-    if (!this.isRoot) {
+    if (!this.__routerIsRoot) {
       return;
     }
 
@@ -125,22 +160,26 @@ export class Router extends Component {
 
     this.__routerListen();
 
-    await this.__routerDispatch(this.__routerCreateContext(this.getClientUri()));
+    const uri = this.getUri(this.location);
+    await this.__routerDispatch(new Context({ uri }));
   }
 
   stop () {
-    if (!this.isRoot) {
+    if (!this.__routerIsRoot) {
       return;
     }
 
     if (debug.enabled) debug(`Stopping ${this.is}:${this.__id} ...`);
 
+    this.__middlewareChain = undefined;
+
     this.__routerUnlisten();
   }
 
   async push (uri, navParameters) {
-    debug('Push %s', uri);
-    if (this.getClientUri() === uri) {
+    if (debug.enabled) debug(`Push ${this.is}:${this.__id} %s`, uri);
+
+    if (this.currentUri === uri) {
       return;
     }
 
@@ -149,12 +188,13 @@ export class Router extends Component {
       : this.hash + uri;
 
     this.history.pushState(navParameters, document.title, url);
-    await this.__routerDispatch(this.__routerCreateContext(uri, navParameters));
+    await this.__routerDispatch(new Context({ uri, navParameters }));
   }
 
   async replace (uri, navParameters) {
-    debug('Replace %s', uri);
-    if (this.getClientUri() === uri) {
+    if (debug.enabled) debug(`Replace ${this.is}:${this.__id} %s`, uri);
+
+    if (this.currentUri === uri) {
       return;
     }
 
@@ -163,35 +203,23 @@ export class Router extends Component {
       : this.hash + uri;
 
     this.history.replaceState(navParameters, document.title, url);
-    await this.__routerDispatch(this.__routerCreateContext(uri, navParameters));
+    await this.__routerDispatch(new Context({ uri, navParameters }));
   }
 
-  go (delta) {
+  async go (delta) {
     if (!delta) {
       return;
     }
+
     this.history.go(delta);
-  }
 
-  __routerAddRoute (route) {
-    this.routes.push(route);
-  }
-
-  __routerRemoveRoute (route) {
-    this.routes = this.routes.filter(r => r !== route);
-  }
-
-  __routerAddRouter (router) {
-    this.routers.push(router);
-  }
-
-  __routerRemoveRouter (router) {
-    this.routers = this.routers.filter(r => r !== router);
+    await this.waitFor('router-dispatch');
   }
 
   __routerListen () {
     this.__routerPopstateListener = async () => {
-      await this.__routerDispatch(this.__routerCreateContext(this.getClientUri()));
+      const uri = this.getUri(this.location);
+      await this.__routerDispatch(new Context({ uri }));
     };
 
     this.__routerClickListener = evt => {
@@ -221,53 +249,40 @@ export class Router extends Component {
     event(document).off('click', this.__routerClickListener);
   }
 
-  __routerCreateContext (uri, navParameters = {}) {
-    let { pathname, search } = new URL(uri, 'http://localhost');
-    if (search[0] === '?') {
-      search = search.substr(1);
-    }
-    const queryParameters = qs.parse(search);
-
-    const parameters = {
-      ...queryParameters,
-      ...navParameters,
-    };
-
-    return {
-      // router: this,
-      originalUri: uri,
-      uri,
-      pathname,
-      parameters,
-    };
-  }
-
   async __routerDispatch (ctx) {
+    if (!this.__middlewareChain) {
+      this.__middlewareChain = compose(this.middlewares);
+    }
+
+    this.currentUri = ctx.uri;
+
+    ctx = ctx.shift(this);
+
+    if (debug.enabled) debug(`Dispatching ${this.is}:${this.__id} with ctx: %O`, ctx);
     await this.__middlewareChain(ctx, async () => {
       await this.__routerRoute(ctx);
-
-      await Promise.all(this.routers.map(async router => {
-        await router.__routerDispatch(ctx);
-      }));
     });
+
+    this.fire('router-dispatch', ctx);
   }
 
   async __routerRoute (ctx) {
-    let found;
+    const routes = [];
 
     await Promise.all(this.routes.map(async route => {
       if (route.test(ctx.pathname)) {
-        found = true;
         await route.enter(ctx);
-        return;
+        routes.push(route);
+      } else {
+        await route.leave();
       }
-
-      await route.leave(ctx);
     }));
 
-    if (!found) {
-      throw new Error(`Route not found! (uri:${ctx.getClientUri()})`);
+    if (!routes.length) {
+      throw new Error(`Route not found! (uri:${ctx.originalUri})`);
     }
+
+    return routes;
   }
 }
 
