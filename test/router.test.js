@@ -10,9 +10,11 @@ describe('Router', () => {
     }
   });
 
-  it('navigate', async () => {
+  beforeEach(() => {
     window.location.replace('#');
+  });
 
+  it('navigate', async () => {
     const mockHistory = new MockHistory();
     Repository.singleton().put('test.history', mockHistory);
 
@@ -78,13 +80,10 @@ describe('Router', () => {
       assert.strictEqual(fixture.$$('[xin-view]').nextElementSibling.uri, '/foo');
     } finally {
       fixture.dispose();
-      window.location.replace('#');
     }
   });
 
   it('fill parameters from segment, query, nav parameters', async () => {
-    window.location.replace('#');
-
     const mockHistory = new MockHistory();
     Repository.singleton().put('test.history', mockHistory);
 
@@ -126,7 +125,6 @@ describe('Router', () => {
       assert.strictEqual(fixture.$$('[xin-view]').$.queryEl.textContent.trim(), 'tiga');
     } finally {
       fixture.dispose();
-      window.location.replace('#');
     }
   });
 
@@ -168,8 +166,6 @@ describe('Router', () => {
       }
     });
 
-    window.location.replace('#');
-
     const mockHistory = new MockHistory();
     Repository.singleton().put('test.history', mockHistory);
 
@@ -200,13 +196,10 @@ describe('Router', () => {
       assert.strictEqual(order[4], 'bar focused');
     } finally {
       fixture.dispose();
-      window.location.replace('#');
     }
   });
 
   it('invoke middlewares', async () => {
-    window.location.replace('#');
-
     let stack = [];
 
     define('router-mw-1', class extends Middleware {
@@ -272,13 +265,10 @@ describe('Router', () => {
       assert.strictEqual(stack[4], 'after mw1');
     } finally {
       fixture.dispose();
-      window.location.replace('#');
     }
   });
 
   it('nested router', async () => {
-    window.location.replace('#');
-
     const mockHistory = new MockHistory();
     Repository.singleton().put('test.history', mockHistory);
 
@@ -326,13 +316,11 @@ describe('Router', () => {
       assert(router.textContent.match(/bar/));
     } finally {
       fixture.dispose();
-      window.location.replace('#');
     }
   });
 
   it('lazy load view', async () => {
     Router.init(true);
-    window.location.replace('#');
 
     Repository.bootstrap({
       'view.loaders': [
@@ -387,7 +375,6 @@ describe('Router', () => {
       assert('__id' in view);
     } finally {
       fixture.dispose();
-      window.location.replace('#');
 
       Router.init(true);
     }

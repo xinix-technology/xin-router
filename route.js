@@ -1,4 +1,4 @@
-import { define, Component, Template } from '@xinix/xin';
+import { define, Component } from '@xinix/xin';
 import { Router } from './router';
 
 export class Route extends Component {
@@ -96,7 +96,7 @@ export class Route extends Component {
       this.removeChild(this.__routeTemplate);
     }
 
-    Template.prototype.__templateInitialize.call(this);
+    this.__templateInitialize(undefined, this.props);
   }
 
   test (uri) {
